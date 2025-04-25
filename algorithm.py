@@ -1,9 +1,6 @@
 from atproto import Client, IdResolver, models
 
-from dotenv import load_dotenv
 import os
-
-load_dotenv("bluesky/feedgen/local.env")
 
 class EngineerverseAlgorithm:
     def __init__(self):
