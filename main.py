@@ -41,9 +41,9 @@ async def get_feed_skeleton(feed: str, limit: int = 20, cursor: str = None):
     
     try:
         query = "#python"
-        response = algo.search_posts(query, limit)
+        posts = algo.search_posts(query, limit)
         
-        for post in response.posts:
+        for post in posts:
             search_results.append(post.uri)
             
     except Exception as e:
@@ -62,4 +62,5 @@ async def get_feed_skeleton(feed: str, limit: int = 20, cursor: str = None):
         response["cursor"] = next_cursor
         
     return response
+    
     
