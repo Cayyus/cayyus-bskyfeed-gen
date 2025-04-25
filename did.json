@@ -1,11 +1,11 @@
 {
-    "id": "did:web:cayyus-bskyfeed-gen.onrender.com",
-    "service": [
-      {
-        "id": "#feed",
-        "type": "BskyFeedGenerator",
-        "serviceEndpoint": "https://cayyus-bskyfeed-gen.onrender.com"
-      }
-    ]
-  }
-  
+  "@context": ["https://www.w3.org/ns/did/v1"],
+  "id": "did:web:cayyus-bskyfeed-gen.onrender.com",
+  "service": [
+    {
+      "id": "#bsky_fg",
+      "type": "BskyFeedGenerator",
+      "serviceEndpoint": "https://cayyus-bskyfeed-gen.onrender.com"
+    }
+  ]
+}
