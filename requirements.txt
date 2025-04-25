@@ -1,4 +1,3 @@
 fastapi
 atproto
 uvicorn
-python-dotenv
