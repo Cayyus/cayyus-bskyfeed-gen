@@ -28,39 +28,12 @@ async def serve_did():
     return FileResponse("did.json", media_type="application/json")
 
 @app.get("/xrpc/app.bsky.feed.getFeedSkeleton")
-async def get_feed_skeleton(feed: str, limit: int = 20, cursor: str = None):
-    algo = EngineerverseAlgorithm()
-    algo.authenticate()
+async def get_feed_skeleton(feed: str, limit: int = 50, cursor: str = None):
+    algo = EngineerverseAlgorithm(limit=limit, cursor=cursor)
+    result = algo.python_posts()
 
-    skip = 0
-    if cursor:
-        skip = int(cursor)
-    
-    # Example: Find posts with #python hashtag
-    search_results = []
-    
-    try:
-        query = "#python"
-        posts = algo.search_posts(query, limit)
-        
-        for post in posts:
-            search_results.append(post.uri)
-            
-    except Exception as e:
+    if isinstance(result, tuple) and result[0] == 500:
+        _, e = result
         raise HTTPException(status_code=500, detail=f"Error fetching posts: {str(e)}")
     
-    # Format response according to protocol
-    feed_items = [{"post": uri} for uri in search_results[:limit]]
-    
-    next_cursor = str(skip + limit) if len(search_results) >= limit else None
-    
-    response = {
-        "feed": feed_items
-    }
-    
-    if next_cursor:
-        response["cursor"] = next_cursor
-        
-    return response
-    
-    
+    return result
