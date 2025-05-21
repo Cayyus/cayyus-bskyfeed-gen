@@ -40,31 +40,65 @@ class EngineerverseAlgorithm:
         search = self.client.app.bsky.feed.search_posts(params={"q": q, "limit": limit})
         return search.posts
 
-    def python_posts(self):
+    def curate_feed(self):
         self.authenticate()
-        skip = 0
-        if self.cursor:
-            skip = int(self.cursor)
         
-        # Example: Find posts with #python hashtag
+        # Define our search queries
+        queries = ["#engineering", "#programming", "#math", "#trump"]
+        
+        # Parse cursor if provided
+        current_query_index = 0
+        last_post_index = 0
+        
+        if self.cursor:
+            try:
+                # Decode cursor - assuming format "queryIndex:postIndex"
+                cursor_parts = self.cursor.split(":")
+                current_query_index = int(cursor_parts[0])
+                last_post_index = int(cursor_parts[1])
+            except (ValueError, IndexError):
+                # If cursor parsing fails, start from beginning
+                current_query_index = 0
+                last_post_index = 0
+        
         search_results = []
+        next_cursor = None
         
         try:
-            queries = ["#engineering", "#programming", "#math", "#trump"]
-            
-            for query in queries:
-                posts = self.search_posts(query, self.limit)
+            # Start from where we left off
+            for i in range(current_query_index, len(queries)):
+                query = queries[i]
                 
-                for post in posts:
-                    search_results.append(post.uri)
+                # Get posts for this query
+                posts = self.search_posts(query, 25)  # Get more than needed to have buffer for next page
+                
+                # Skip posts we've already sent (only matters for the first query in this request)
+                start_index = last_post_index if i == current_query_index else 0
+                
+                # Add posts to results
+                for j in range(start_index, len(posts)):
+                    search_results.append(posts[j].uri)
+                    
+                    # If we have enough posts, prepare cursor and break
+                    if len(search_results) >= self.limit:
+                        # Set cursor to continue from next post in current query
+                        next_cursor = f"{i}:{j+1}"
+                        break
+                
+                # If we've collected enough posts, break out of the query loop too
+                if len(search_results) >= self.limit:
+                    break
+                    
+                # If we've processed all posts in this query, move to next query
+                if i < len(queries) - 1:
+                    # Next query, starting from the beginning
+                    next_cursor = f"{i+1}:0"
                 
         except Exception as e:
             return 500, e
         
         # Format response according to protocol
         feed_items = [{"post": uri} for uri in search_results[:self.limit]]
-        
-        next_cursor = str(skip + self.limit) if len(search_results) >= self.limit else None
         
         response = {
             "feed": feed_items
