@@ -29,15 +29,11 @@ async def serve_did():
 
 @app.get("/xrpc/app.bsky.feed.getFeedSkeleton")
 async def get_feed_skeleton(feed: str, limit: int = 50, cursor: str = None):
-    expected_feed_uri = f"at://{SERVICE_DID}/app.bsky.feed.generator/Engineerverse"
-    if feed != expected_feed_uri:
-        raise HTTPException(status_code=400, detail=f"Unknown feed: {feed}")
-    
-    algo = EngineerverseAlgorithm(cursor=cursor, limit=limit)
+    algo = EngineerverseAlgorithm(limit=limit, cursor=cursor)
     result = algo.curate_feed()
 
     if isinstance(result, tuple) and result[0] == 500:
         _, e = result
         raise HTTPException(status_code=500, detail=f"Error fetching posts: {str(e)}")
-    
+
     return result
