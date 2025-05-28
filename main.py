@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from algorithm import EngineerverseAlgorithm
 
 # Configuration
-SERVICE_DID = "did:web:cayyus-bskyfeed-gen.onrender.com"  
+SERVICE_DID = "did:web:cayyus-bskyfeed-gen.onrender.com"  # Your feed's DID
 SERVICE_HANDLE = "cayyus-bskyfeed-gen.onrender.com"
 FEED_NAME = "Engineerverse by Cayyus"
 
@@ -12,11 +12,11 @@ app = FastAPI()
 
 @app.get("/xrpc/app.bsky.feed.describeFeedGenerator")
 async def describe_feed_generator():
-    {
-        "did": SERVICE_DID,
+    return {
+        "did": "did:web:cayyus-bskyfeed-gen.onrender.com",
         "feeds": [
             {
-            "uri": "at://{SERVICE_DID}/app.bsky.feed.generator/Engineerverse-by-Cayyus",
+            "uri": "at://did:web:cayyus-bskyfeed-gen.onrender.com/app.bsky.feed.generator/Engineerverse-by-Cayyus",
             "displayName": FEED_NAME,
             "description": "Includes engineering content, programming and software development and other science and math related stuff"
             }
@@ -27,9 +27,13 @@ async def describe_feed_generator():
 async def serve_did():
     return FileResponse("did.json", media_type="application/json")
 
-app.get("/xrpc/app.bsky.feed.getFeedSkeleton")
+@app.get("/xrpc/app.bsky.feed.getFeedSkeleton")
 async def get_feed_skeleton(feed: str, limit: int = 50, cursor: str = None):
-    algo = EngineerverseAlgorithm(limit=limit, cursor=cursor)
+    expected_feed_uri = f"at://{SERVICE_DID}/app.bsky.feed.generator/Engineerverse"
+    if feed != expected_feed_uri:
+        raise HTTPException(status_code=400, detail=f"Unknown feed: {feed}")
+    
+    algo = EngineerverseAlgorithm(cursor=cursor, limit=limit)
     result = algo.curate_feed()
 
     if isinstance(result, tuple) and result[0] == 500:
