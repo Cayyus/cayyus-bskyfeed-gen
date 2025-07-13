@@ -88,6 +88,7 @@ class EngineerverseAlgorithm:
         self.resolver = IdResolver()
         self.cursor = cursor
         self.limit = limit
+        self.queries = None
         
         self.search_categories = {
             'discipline_hashtags': [
