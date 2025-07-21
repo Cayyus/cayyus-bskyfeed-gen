@@ -260,7 +260,7 @@ class EngineerverseAlgorithm:
         try:
             for i in range(current_query_index, len(self.queries)):
                 query = self.queries[i]
-                posts = self.search_posts(query, 10)
+                posts = self.search_posts(query, self.limit)
 
                 start_index = last_post_index if i == current_query_index else 0
 
