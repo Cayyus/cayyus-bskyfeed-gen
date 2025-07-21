@@ -28,7 +28,7 @@ async def serve_did():
     return FileResponse("did.json", media_type="application/json")
 
 @app.get("/xrpc/app.bsky.feed.getFeedSkeleton")
-async def get_feed_skeleton(feed: str, limit: int = 999999, cursor: str = None):
+async def get_feed_skeleton(feed: str, limit: int = 50, cursor: str = None):
     algo = EngineerverseAlgorithm(limit=limit, cursor=cursor)
     result = algo.curate_feed()
 
