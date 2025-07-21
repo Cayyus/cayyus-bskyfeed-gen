@@ -247,10 +247,12 @@ class EngineerverseAlgorithm:
             except (ValueError, IndexError):
                 pass
 
-        # If no queries yet, generate new ones
-        if not self.queries:
+        # Generate new queries if we don't have any OR if we've reached the end of current queries
+        if not hasattr(self, 'queries') or not self.queries or current_query_index >= len(self.queries):
             selected_terms = self.lottery.select_multiple_terms(5)
             self.queries = [term["term"] for term in selected_terms]
+            current_query_index = 0  # Reset to start of new query batch
+            last_post_index = 0      # Reset post index for new batch
 
         search_results = []
         next_cursor = None
