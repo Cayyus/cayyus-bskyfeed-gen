@@ -146,17 +146,31 @@ class EngineerverseAlgorithm:
         """Get existing query batch or create new one"""
         current_time = time.time()
         
-        # Check if we have a cached batch that's still valid
+        # Check if we have a cached batch
         if batch_id in self.query_cache:
             batch_data = self.query_cache[batch_id]
-            if current_time - batch_data['created_at'] < self.cache_duration:
+            # For sequence-based batches, we don't expire them as quickly
+            # This allows continuous generation of new batches on demand
+            if current_time - batch_data['created_at'] < self.cache_duration * 2:
                 return batch_data['queries']
         
-        # Generate new batch with deterministic seed
+        # Generate new batch with deterministic seed based on batch_id
+        # This ensures the same batch_id always generates the same queries
         seed = int(hashlib.md5(batch_id.encode()).hexdigest()[:8], 16)
+        
+        # Create a fresh lottery instance for this batch
+        # Use a different seed modifier to ensure variety between sequences
         lottery = WeightedLottery(self.all_search_terms, seed=seed)
-        selected_terms = lottery.select_multiple_terms(8)  # Generate more terms for variety
+        
+        # Generate more terms for variety, but vary the count based on sequence
+        base_count = 6
+        sequence_modifier = hash(batch_id) % 4  # 0-3
+        term_count = base_count + sequence_modifier  # 6-9 terms per batch
+        
+        selected_terms = lottery.select_multiple_terms(term_count)
         queries = [term["term"] for term in selected_terms]
+        
+        print(f"Generated batch {batch_id} with {len(queries)} queries: {queries}")
         
         # Cache the new batch
         self.query_cache[batch_id] = {
@@ -248,6 +262,7 @@ class EngineerverseAlgorithm:
         current_query_index = 0
         last_post_index = 0
         batch_id = self._generate_batch_id()
+        batch_sequence = 0  # Track which batch in sequence we're on
 
         if self.cursor:
             try:
@@ -258,12 +273,16 @@ class EngineerverseAlgorithm:
                 # If cursor has batch_id, use it to maintain consistency
                 if len(cursor_parts) >= 3:
                     batch_id = cursor_parts[2]
+                # If cursor has sequence number, use it
+                if len(cursor_parts) >= 4:
+                    batch_sequence = int(cursor_parts[3])
             except (ValueError, IndexError):
                 print(f"Invalid cursor format: {self.cursor}")
                 pass
 
         # Get the query batch for this request
-        queries = self._get_or_create_query_batch(batch_id)
+        full_batch_id = f"{batch_id}_seq{batch_sequence}"
+        queries = self._get_or_create_query_batch(full_batch_id)
         
         search_results = []
         next_cursor = None
@@ -281,7 +300,7 @@ class EngineerverseAlgorithm:
                 for j in range(start_index, len(posts)):
                     if len(search_results) >= self.limit:
                         # We have enough posts, set cursor for next request
-                        next_cursor = f"{i}:{j}:{batch_id}"
+                        next_cursor = f"{i}:{j}:{batch_id}:{batch_sequence}"
                         break
                     
                     search_results.append(posts[j].uri)
@@ -294,11 +313,49 @@ class EngineerverseAlgorithm:
                 if i < len(queries) - 1:
                     last_post_index = 0
 
-            # If we've gone through all queries and still need more posts, generate next batch
-            if len(search_results) < self.limit and current_query_index >= len(queries) - 1:
-                # Move to next batch
-                next_batch_id = f"batch_{int(time.time() // self.cache_duration) + 1}"
-                next_cursor = f"0:0:{next_batch_id}"
+            # CRITICAL FIX: Handle query exhaustion by generating new batch immediately
+            if len(search_results) < self.limit:
+                print(f"Current batch exhausted with only {len(search_results)} posts. Generating new batch...")
+                
+                # Try to get more content from a fresh batch
+                attempts = 0
+                max_attempts = 3  # Prevent infinite loops
+                
+                while len(search_results) < self.limit and attempts < max_attempts:
+                    attempts += 1
+                    batch_sequence += 1
+                    
+                    # Generate new batch with different sequence
+                    new_batch_id = f"{batch_id}_seq{batch_sequence}"
+                    new_queries = self._get_or_create_query_batch(new_batch_id)
+                    
+                    print(f"Attempt {attempts}: Generated new batch with {len(new_queries)} queries")
+                    
+                    # Search through new queries
+                    for i, query in enumerate(new_queries):
+                        posts = self.search_posts(query, min(50, self.limit * 2))
+                        
+                        for j, post in enumerate(posts):
+                            if len(search_results) >= self.limit:
+                                # Set cursor to continue from this new batch
+                                next_cursor = f"{i}:{j+1}:{batch_id}:{batch_sequence}"
+                                break
+                            
+                            # Avoid duplicates by checking if we've seen this post
+                            if post.uri not in [item for item in search_results]:
+                                search_results.append(post.uri)
+                        
+                        # If we have enough posts, break out of query loop
+                        if len(search_results) >= self.limit:
+                            break
+                    
+                    # If we still don't have enough posts, continue to next batch
+                    if len(search_results) < self.limit:
+                        print(f"Still need more posts after batch {batch_sequence}. Continuing...")
+
+                # Set cursor for continuation if we have results
+                if search_results and not next_cursor:
+                    next_cursor = f"0:0:{batch_id}:{batch_sequence + 1}"
 
         except Exception as e:
             print(f"Error in curate_feed: {e}")
@@ -308,8 +365,12 @@ class EngineerverseAlgorithm:
         feed_items = [{"post": uri} for uri in search_results[:self.limit]]
         response = {"feed": feed_items}
 
-        if next_cursor and len(feed_items) == self.limit:
+        # Only include cursor if we have posts and expect more content
+        if next_cursor and len(feed_items) > 0:
             response["cursor"] = next_cursor
+        elif len(feed_items) == 0:
+            # No cursor if no posts found - signals end of feed
+            print("No posts found, ending feed")
 
         return response
 
