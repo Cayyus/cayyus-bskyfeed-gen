@@ -6,6 +6,8 @@ import pytz
 
 import random
 import bisect
+import time
+import hashlib
 
 class WeightedLottery:
     def __init__(self, term_data, seed=None):
